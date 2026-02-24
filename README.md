@@ -14,7 +14,7 @@ K3D runs K3s inside Docker containers, so Docker must be installed first.
 We use Docker Desktop for Ubuntu, following the
 [official instructions](https://docs.docker.com/desktop/setup/install/linux/ubuntu/).
 
-### 1a: Set up Docker's apt repository
+### 1a: Set up Docker's apt repository and install CLI dependencies
 
 ```bash
 # Install prerequisites
@@ -35,6 +35,7 @@ Components: stable
 Signed-By: /etc/apt/keyrings/docker.asc
 EOF
 
+# Update and install Docker CLI (required dependency for Docker Desktop)
 sudo apt-get update
 sudo apt-get install -y docker-ce-cli docker-buildx-plugin docker-compose-plugin containerd.io
 ```
