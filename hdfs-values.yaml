@@ -1,0 +1,66 @@
+# Lightweight HDFS configuration for K3D demo
+# Chart: pfisterer/apache-hadoop-helm
+
+image:
+  repository: farberg/apache-hadoop
+  tag: 3.4.1
+  pullPolicy: IfNotPresent
+
+hadoopVersion: 3.4.1
+logLevel: INFO
+
+# Use "soft" anti-affinity so all pods can co-locate on a single K3D node
+antiAffinity: "soft"
+
+hdfs:
+  nameNode:
+    pdbMinAvailable: 1
+    resources:
+      requests:
+        memory: "128Mi"
+        cpu: "10m"
+      limits:
+        memory: "512Mi"
+        cpu: "500m"
+
+  dataNode:
+    replicas: 2
+    pdbMinAvailable: 1
+    resources:
+      requests:
+        memory: "128Mi"
+        cpu: "10m"
+      limits:
+        memory: "512Mi"
+        cpu: "500m"
+
+  webhdfs:
+    enabled: true
+
+yarn:
+  resourceManager:
+    pdbMinAvailable: 1
+    resources:
+      requests:
+        memory: "128Mi"
+        cpu: "10m"
+      limits:
+        memory: "512Mi"
+        cpu: "500m"
+
+  nodeManager:
+    replicas: 1
+    pdbMinAvailable: 1
+    resources:
+      requests:
+        memory: "128Mi"
+        cpu: "10m"
+      limits:
+        memory: "512Mi"
+        cpu: "500m"
+
+persistence:
+  nameNode:
+    enabled: false
+  dataNode:
+    enabled: false
