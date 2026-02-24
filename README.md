@@ -2,6 +2,12 @@
 
 A demo of K3D running Apache Hadoop HDFS (and eventually Apache Flink / Beam) on an Ubuntu VM.
 
+# Warning
+
+This code was mostly created by Claude, and although I have tested to see it work, I haven't done a through analysis of everything contained here.  I will be cleaning up Claudes work in the future :)  
+
+### VERIFY / USE AT YOUR OWN RISK!  
+
 ## Prerequisites
 
 - Ubuntu 24.04 LTS (or similar Debian-based system)

@@ -17,10 +17,10 @@ hdfs:
     pdbMinAvailable: 1
     resources:
       requests:
-        memory: "128Mi"
+        memory: "256Mi"
         cpu: "10m"
       limits:
-        memory: "512Mi"
+        memory: "1Gi"
         cpu: "500m"
 
   dataNode:
@@ -28,10 +28,10 @@ hdfs:
     pdbMinAvailable: 1
     resources:
       requests:
-        memory: "128Mi"
+        memory: "256Mi"
         cpu: "10m"
       limits:
-        memory: "512Mi"
+        memory: "1Gi"
         cpu: "500m"
 
   webhdfs:
@@ -42,10 +42,10 @@ yarn:
     pdbMinAvailable: 1
     resources:
       requests:
-        memory: "128Mi"
+        memory: "256Mi"
         cpu: "10m"
       limits:
-        memory: "512Mi"
+        memory: "1Gi"
         cpu: "500m"
 
   nodeManager:
@@ -53,10 +53,10 @@ yarn:
     pdbMinAvailable: 1
     resources:
       requests:
-        memory: "128Mi"
+        memory: "256Mi"
         cpu: "10m"
       limits:
-        memory: "512Mi"
+        memory: "1Gi"
         cpu: "500m"
 
 persistence:
