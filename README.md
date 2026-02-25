@@ -2,74 +2,27 @@
 
 A demo of K3D running Apache Hadoop HDFS (and eventually Apache Flink / Beam) on an Ubuntu VM.
 
+
 # Warning
 
 This code was mostly created by Claude, and although I have tested to see it work, I haven't done a through analysis of everything contained here.  I will be cleaning up Claudes work in the future :)  
 
 ### VERIFY / USE AT YOUR OWN RISK!  
 
-## Prerequisites
+# Prerequisites
 
-- Ubuntu 24.04 LTS (or similar Debian-based system)
-- At least 4 GB of RAM available
-- sudo access
+[Windows Prerequisites](docs/WINDOWS_SETUP_NOTES.md)
 
 ## Step 1: Install Docker Desktop
 
-K3D runs K3s inside Docker containers, so Docker must be installed first.
-We use Docker Desktop for Ubuntu, following the
-[official instructions](https://docs.docker.com/desktop/setup/install/linux/ubuntu/).
+K3D runs K3s inside Docker containers, so Docker must be installed first.  Note the majority of Docker users prefer Docker Desktop so we will use it!
 
-### 1a: Set up Docker's apt repository and install CLI dependencies
+ - [official instructions](https://docs.docker.com/desktop/)
 
-```bash
-# Install prerequisites
-sudo apt-get update
-sudo apt-get install -y ca-certificates curl
+After you complete the installation you should see a GUI window like this;
 
-# Add Docker's official GPG key
-sudo install -m 0755 -d /etc/apt/keyrings
-sudo curl -fsSL https://download.docker.com/linux/ubuntu/gpg -o /etc/apt/keyrings/docker.asc
-sudo chmod a+r /etc/apt/keyrings/docker.asc
+![Docker Desktop GUI](docs/top-images/dockerDesktop.png)
 
-# Add the Docker repository (DEB822 format)
-sudo tee /etc/apt/sources.list.d/docker.sources <<EOF
-Types: deb
-URIs: https://download.docker.com/linux/ubuntu
-Suites: $(. /etc/os-release && echo "${UBUNTU_CODENAME:-$VERSION_CODENAME}")
-Components: stable
-Signed-By: /etc/apt/keyrings/docker.asc
-EOF
-
-# Update and install Docker CLI (required dependency for Docker Desktop)
-sudo apt-get update
-sudo apt-get install -y docker-ce-cli docker-buildx-plugin docker-compose-plugin containerd.io
-```
-
-### 1b: Download and install Docker Desktop
-
-Download the latest `.deb` package and install it:
-
-```bash
-# Download the latest Docker Desktop .deb
-wget -O docker-desktop-amd64.deb "https://desktop.docker.com/linux/main/amd64/docker-desktop-amd64.deb"
-
-# Install the package
-sudo apt-get install -y ./docker-desktop-amd64.deb
-```
-
-### 1c: Launch Docker Desktop
-
-```bash
-# Start Docker Desktop via systemd
-systemctl --user start docker-desktop
-
-# (Optional) Enable auto-start on login
-systemctl --user enable docker-desktop
-```
-
-You can also launch it from the Activities menu in your desktop environment.
-Accept the Subscription Service Agreement when prompted.
 
 ### 1d: Verify Docker is working
 
@@ -77,34 +30,30 @@ Accept the Subscription Service Agreement when prompted.
 docker run --rm hello-world
 ```
 
-## Step 2: Install K3D
+## Step 2: Install kubectl
 
-K3D is a lightweight wrapper that runs K3s (a minimal Kubernetes distribution) inside Docker.
+kubectl is the Kubernetes command-line tool, follow the official instructions.
 
-```bash
-curl -s https://raw.githubusercontent.com/k3d-io/k3d/main/install.sh | bash
-```
-
-Verify:
-
-```bash
-k3d version
-```
-
-## Step 3: Install kubectl
-
-kubectl is the Kubernetes command-line tool.
-
-```bash
-curl -LO "https://dl.k8s.io/release/$(curl -L -s https://dl.k8s.io/release/stable.txt)/bin/linux/amd64/kubectl"
-sudo install -o root -g root -m 0755 kubectl /usr/local/bin/kubectl
-rm kubectl
-```
+-[Install kubectl](https://kubernetes.io/docs/tasks/tools/)
 
 Verify:
 
 ```bash
 kubectl version --client
+```
+
+## Step 3: Install K3D
+
+K3D is a lightweight wrapper that runs K3s (a minimal Kubernetes distribution) inside Docker.
+
+- [Official K3D installation instructions](https://k3d.io/stable/#releases)
+
+
+
+Verify:
+
+```bash
+k3d version
 ```
 
 ## Step 4: Install Helm
