@@ -13,6 +13,7 @@ Note: On Windows I used the following command as administrator in a Windows Comm
 ```
 choco install wget
 choco install curl
+choco install kubernetes-helm
 ```
 
 Then I could run wget or curl from GitBash.

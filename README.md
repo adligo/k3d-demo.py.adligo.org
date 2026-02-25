@@ -60,9 +60,7 @@ k3d version
 
 Helm is the Kubernetes package manager used to deploy HDFS.
 
-```bash
-curl https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-3 | bash
-```
+- [Official Helm Installation Instructions](https://helm.sh/docs/intro/install/)
 
 Verify:
 
