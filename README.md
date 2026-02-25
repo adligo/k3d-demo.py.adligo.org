@@ -156,6 +156,9 @@ To tear down the entire environment:
 # Delete the HDFS Helm release
 helm uninstall hadoop
 
+# Stop the K3D cluster
+k3d cluster stop hdfs-demo
+
 # Delete the K3D cluster
 k3d cluster delete hdfs-demo
 ```
