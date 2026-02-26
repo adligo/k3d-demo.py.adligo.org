@@ -1,0 +1,36 @@
+# Bitnami Kafka configuration for K3D demo
+# Chart: bitnami/kafka (KRaft mode, no ZooKeeper)
+
+# Bitnami removed Kafka images from docker.io/bitnami — use the legacy repo.
+# The chart's security check must also be relaxed to allow the legacy images.
+# See: https://github.com/bitnami/charts/issues/36325
+global:
+  security:
+    allowInsecureImages: true
+
+image:
+  repository: bitnamilegacy/kafka
+
+# 3 combined controller+broker nodes (KRaft mode)
+controller:
+  replicaCount: 3
+  resourcePreset: "micro"
+  persistence:
+    enabled: false
+
+# Disable separate broker nodes (controllers act as brokers)
+broker:
+  replicaCount: 0
+
+# PLAINTEXT listeners (no auth for demo)
+listeners:
+  client:
+    protocol: PLAINTEXT
+  controller:
+    protocol: PLAINTEXT
+  interbroker:
+    protocol: PLAINTEXT
+
+# Provisioning disabled — the Bitnami chart's post-install hook has a
+# hard-coded 120s timeout that races against broker startup in lightweight
+# clusters.  Topics are created manually after pods are Running (see README).
