@@ -39,7 +39,7 @@ docker run --rm hello-world
 
 kubectl is the Kubernetes command-line tool, follow the official instructions.
 
--[Install kubectl](https://kubernetes.io/docs/tasks/tools/)
+ - [Install kubectl](https://kubernetes.io/docs/tasks/tools/)
 
 Verify:
 
@@ -104,13 +104,11 @@ Add the Hadoop Helm chart repository and install HDFS using the provided
 lightweight values file:
 
 ```bash
-# Add the Helm repo
-helm repo add pfisterer-hadoop https://pfisterer.github.io/apache-hadoop-helm/
-helm repo update
-
 # Install HDFS using the demo values file (from the root of this repo)
-helm install hadoop pfisterer-hadoop/hadoop -f hdfs-values.yaml
+helm install hadoop ./helm-charts/hadoop -f hdfs-values.yaml
 ```
+
+Note these helm-charts were created using commands in [HELM_README.md](helm-charts/HELM_README.md)
 
 Wait for all pods to become ready (this may take a few minutes as images are pulled):
 
@@ -194,13 +192,11 @@ Add the Bitnami Helm chart repository and install Kafka using the provided
 values file:
 
 ```bash
-# Add the Bitnami Helm repo
-helm repo add bitnami https://charts.bitnami.com/bitnami
-helm repo update
-
 # Install Kafka using the demo values file (from the root of this repo)
-helm install kafka bitnami/kafka -f kafka-values.yaml
+helm install kafka ./helm-charts/kafka -f kafka-values.yaml
 ```
+
+Note these helm-charts were created using commands in [HELM_README.md](helm-charts/HELM_README.md)
 
 Wait for all pods to become ready (this may take a few minutes as images are pulled):
 
