@@ -201,7 +201,11 @@ def hdfs_upload(local_path, hdfs_path):
 # Kafka helper (still uses kubectl exec — only two sequential calls)
 # ---------------------------------------------------------------------------
 def send_kafka_message(message_dict):
-    """Send a JSON message to the batchSignals Kafka topic."""
+    """
+      TODO move to a python API, Claude did this
+      Send a JSON message to the batchSignals Kafka topic.
+    """
+    print("TODO move the code in send_kafka_message to a python API, Claude did this in bash")
     msg = json.dumps(message_dict)
     result = subprocess.run(
         [

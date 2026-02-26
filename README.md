@@ -77,9 +77,7 @@ helm version
 
 If you have any existing k3d clusters or orphaned containers, tear them down first:
 
-```bash
-bash teardown.sh
-```
+- [TEARDOWN_NOTES.md](docs/TEARDOWN_NOTES.md)
 
 Create a single-server K3D cluster named `demo`:
 
@@ -169,6 +167,8 @@ kubectl port-forward hadoop-hadoop-hdfs-nn-0 9870:9870 &
 # NOTE: The Helm chart configures DataNode HTTP on port 51000, not the
 # Hadoop default of 9864.
 kubectl port-forward hadoop-hadoop-hdfs-dn-0 51000:51000 &
+# The Ampersands at the end of these lines & enable the 
+# port forwarding to continue even after the shell is closed!
 ```
 
 Verify the port-forwards are working:
@@ -292,6 +292,7 @@ kubectl exec -it kafka-controller-0 -- kafka-console-consumer.sh \
 ### Run the upload
 
 ```bash
+cd src 
 python3 upload_math_images.py
 ```
 
@@ -313,105 +314,12 @@ kubectl exec -it hadoop-hadoop-hdfs-nn-0 -- hdfs dfs -rm -r /math-images
 
 ## Cleanup
 
-To tear down the entire environment:
-
-```bash
-# Delete the Kafka Helm release
-helm uninstall kafka
-
-# Delete the HDFS Helm release
-helm uninstall hadoop
-
-# Stop the K3D cluster
-k3d cluster stop demo
-
-# Delete the K3D cluster
-k3d cluster delete demo
-```
-
-Or use the teardown script to remove all k3d clusters and orphaned containers at once:
-
-```bash
-bash teardown.sh
-```
+- [TEARDOWN_NOTES.md](docs/TEARDOWN_NOTES.md)
 
 ## Configuration
 
-The file `hdfs-values.yaml` contains the Helm values used for this demo. Key settings:
-
-| Setting | Value | Description |
-|---|---|---|
-| DataNode replicas | 2 | Number of HDFS DataNodes |
-| NodeManager replicas | 1 | Number of YARN NodeManagers |
-| Persistence | disabled | Data is ephemeral (demo only) |
-| Anti-affinity | soft | Allows pods to co-locate on a single node |
-| Memory limits | 512Mi | Reduced from defaults for lightweight demo |
-| WebHDFS | enabled | REST API access to HDFS |
-
-The file `kafka-values.yaml` contains the Helm values for Kafka. Key settings:
-
-| Setting | Value | Description |
-|---|---|---|
-| Image repository | bitnamilegacy/kafka | Workaround for removed `bitnami/kafka` images |
-| Controller replicas | 3 | Combined controller+broker nodes (KRaft mode) |
-| Resource preset | micro | 250m CPU, 256Mi memory per node |
-| Persistence | disabled | Data is ephemeral (demo only) |
-| Listeners | PLAINTEXT | No SASL/TLS auth (demo only) |
-| Provisioning | disabled | Topics are created manually after pods are Running |
+- [CONFIG_DETAILS.md](docs/CONFIG_DETAILS.md)
 
 ## Troubleshooting
 
-**Pods stuck in Pending:**
-```bash
-kubectl describe pod <pod-name>
-```
-Usually caused by insufficient resources. Try reducing replicas in `hdfs-values.yaml`.
-
-**Pods in CrashLoopBackOff:**
-```bash
-kubectl logs <pod-name>
-```
-Check logs for configuration errors.
-
-**K3D cluster won't start:**
-Make sure Docker Desktop is running: `systemctl --user start docker-desktop`
-
-**ImagePullBackOff / ErrImagePull:**
-First, find which image is failing:
-```bash
-kubectl describe pod <pod-name> | grep -A 10 'Events'
-```
-Common causes:
-- **No internet** — K3D needs to pull images from Docker Hub.
-- **Image removed from registry** — Bitnami periodically removes older images. Check the Events output for the exact image tag, then search [Docker Hub](https://hub.docker.com/r/bitnami/kafka/tags) for available tags. You may need to override the image repository in your values file (see the Kafka image fix below).
-
-**Kafka image not found (`bitnami/kafka` tag missing):**
-Bitnami moved Kafka images from `docker.io/bitnami` to `docker.io/bitnamilegacy`. The `kafka-values.yaml` in this repo already overrides this, but if you see `ErrImagePull` for a `bitnami/kafka` tag, make sure your values file contains:
-```yaml
-image:
-  repository: bitnamilegacy/kafka
-```
-Then reinstall: `helm uninstall kafka && helm install kafka bitnami/kafka -f kafka-values.yaml`
-See [bitnami/charts#36325](https://github.com/bitnami/charts/issues/36325) for details.
-
-**Kafka pods OOMKilled:**
-The micro resource preset may not be enough on memory-constrained VMs. Edit `kafka-values.yaml` and switch to explicit resource limits:
-```yaml
-controller:
-  resourcePreset: ""
-  resources:
-    requests:
-      memory: "512Mi"
-      cpu: "250m"
-    limits:
-      memory: "1Gi"
-      cpu: "500m"
-```
-Then run `helm upgrade kafka bitnami/kafka -f kafka-values.yaml`.
-
-**Kafka topic creation fails with "not enough replicas":**
-All 3 controller pods must be Running before creating topics with replication factor 3. Check with:
-```bash
-kubectl get pods -l app.kubernetes.io/instance=kafka
-```
-Wait until all show `Running`, then retry the `kafka-topics.sh --create` commands.
+- [TROUBLESHOOTING.md](docs/TROUBLESHOOTING.md)
