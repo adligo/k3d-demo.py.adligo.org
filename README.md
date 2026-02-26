@@ -9,15 +9,20 @@ This code was mostly created by Claude, and although I have tested to see it wor
 
 ### VERIFY / USE AT YOUR OWN RISK!  
 
-# Prerequisites
+# Prerequisites / Setup Notes
 
-[Windows Prerequisites](docs/WINDOWS_SETUP_NOTES.md)
+- [Ubuntu on VirtualBox Setup Notes](docs/UBUNTU_VBOX_SETUP_NOTES.md)
+- [Windows Setup Notes](docs/WINDOWS_SETUP_NOTES.md)
 
 ## Step 1: Install Docker Desktop
 
 K3D runs K3s inside Docker containers, so Docker must be installed first.  Note the majority of Docker users prefer Docker Desktop so we will use it!
 
  - [official instructions](https://docs.docker.com/desktop/)
+
+Note:  Docker Desktop does NOT work well when installed on Virtual Box in many cases.  Virtual Box users will likely want to use Docker Station instead, refer to the following README;
+
+- [Ubuntu on VirtualBox Setup Notes](docs/UBUNTU_VBOX_SETUP_NOTES.md)
 
 After you complete the installation you should see a GUI window like this;
 
