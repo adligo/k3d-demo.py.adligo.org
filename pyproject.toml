@@ -1,0 +1,21 @@
+[project]
+name = "k3d-demo-math-ocr"
+version = "0.1.0"
+description = "PyTorch ML model to map handwritten math formula images to LaTeX"
+requires-python = ">=3.10"
+dependencies = [
+    "torch>=2.0",
+    "torchvision>=0.15",
+    "Pillow>=10.0",
+    "scipy>=1.10",
+]
+
+[project.scripts]
+train-math-ocr = "src.math_ocr:main"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src"]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
