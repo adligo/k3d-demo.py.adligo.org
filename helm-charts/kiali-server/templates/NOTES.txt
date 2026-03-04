@@ -1,0 +1,36 @@
+Welcome to Kiali! For more details on Kiali, see: https://kiali.io
+
+{{- if .Values.skipResources }}
+The Kiali Server [{{ .Chart.AppVersion }}] has been installed in namespace [{{ .Release.Namespace }}].
+===============
+!!! WARNING !!!
+===============
+You have configured the "skipResources" setting. This helm chart will not create or manage those resources.
+It is your responsibility to manually create those resources yourself. Until you create those
+resources with their correct configurations, the server WILL NOT work.
+{{- else }}
+The Kiali Server [{{ .Chart.AppVersion }}] has been installed in namespace [{{ .Release.Namespace }}]. It will be ready soon.
+{{- end }}
+===============
+
+{{- if or (.Values.deployment.additional_pod_containers_yaml) (.Values.deployment.additional_pod_init_containers_yaml) }}
+===============
+SECURITY AUDIT
+===============
+{{- if .Values.deployment.additional_pod_init_containers_yaml }}
+Additional initContainers have been deployed in the Kiali server pod:
+{{- range .Values.deployment.additional_pod_init_containers_yaml }}
+- {{ .name }}
+{{- end }}
+{{- end }}
+
+{{- if .Values.deployment.additional_pod_containers_yaml }}
+Additional containers have been deployed in the Kiali server pod:
+{{- range .Values.deployment.additional_pod_containers_yaml }}
+- {{ .name }}
+{{- end }}
+{{- end }}
+===============
+{{- end }}
+
+(Helm: Chart=[{{ .Chart.Name }}], Release=[{{ .Release.Name }}], Version=[{{ .Chart.Version }}])

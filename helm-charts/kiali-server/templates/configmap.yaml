@@ -1,0 +1,42 @@
+{{- if hasKey .Values.deployment "namespace" }}
+  {{- if ne .Values.deployment.namespace .Release.Namespace }}
+    {{- fail (printf "deployment.namespace is set to [%s] but must match the Helm release namespace [%s]." .Values.deployment.namespace .Release.Namespace) }}
+  {{- end }}
+{{- end }}
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "kiali-server.fullname" . }}
+  namespace: "{{ .Release.Namespace }}"
+  labels:
+    {{- include "kiali-server.labels" . | nindent 4 }}
+  {{- if .Values.deployment.configmap_annotations }}
+  annotations:
+    {{- toYaml .Values.deployment.configmap_annotations | nindent 4 }}
+  {{- end }}
+data:
+  config.yaml: |
+    {{- /* Most of .Values is simply the ConfigMap - strip out the keys that are not part of the ConfigMap */}}
+    {{- $cm := omit .Values "kiali_route_url" }}
+    {{- /* The helm chart defines namespace for us, but pass it to the ConfigMap in case the server needs it */}}
+    {{- $_ := set $cm.deployment "namespace" .Release.Namespace }}
+    {{- /* Some values of the ConfigMap are generated, but might not be identical, from .Values */}}
+    {{- $_ := set $cm.auth "strategy" (include "kiali-server.auth.strategy" .) }}
+    {{- $_ := set $cm.auth.openshift "client_id_prefix" (include "kiali-server.fullname" .) }}
+    {{- $_ := set $cm.deployment "instance_name" (include "kiali-server.fullname" .) }}
+    {{- /* Default TLS source is auto on OpenShift, config elsewhere, unless user overrides */}}
+    {{- if not $cm.deployment.tls_config }}{{- $_ := set $cm.deployment "tls_config" (dict) }}{{- end }}
+    {{- $_ := set $cm.deployment.tls_config "source" (include "kiali-server.deployment.tls_config.source" .) }}
+    {{- $_ := set $cm.identity "cert_file" (include "kiali-server.identity.cert_file" .) }}
+    {{- $_ := set $cm.identity "private_key_file" (include "kiali-server.identity.private_key_file" .) }}
+    {{- $_ := set $cm.login_token "signing_key" (include "kiali-server.login_token.signing_key" .) }}
+    {{- $_ := set $cm.external_services.istio "root_namespace" (include "kiali-server.external_services.istio.root_namespace" .) }}
+    {{- $_ := set $cm.server "web_root" (include "kiali-server.server.web_root" .) }}
+    {{- /* When cluster_wide_access is false, convert discovery selectors to exact namespace names */ -}}
+    {{- if not .Values.deployment.cluster_wide_access }}
+      {{- $discoverySelectorsYaml := include "kiali-server.discovery-selectors-for-config" . | fromYaml }}
+      {{- $_ := set $cm.deployment "discovery_selectors" $discoverySelectorsYaml }}
+    {{- end }}
+    {{- toYaml $cm | nindent 4 }}
+...

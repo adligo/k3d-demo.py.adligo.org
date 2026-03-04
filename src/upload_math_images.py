@@ -1,20 +1,29 @@
 #!/usr/bin/env python3
 """Upload math-images/ to HDFS and send batch signals to Kafka.
 
-Uses the WebHDFS REST API for file uploads (concurrent HTTP PUTs) and
-kubectl exec only for the two Kafka messages.  No pip dependencies —
-only the Python standard library.
+All HDFS traffic goes through the Istio/Envoy ingress gateway — no
+kubectl port-forwards required.  The two Kafka signal messages still
+use ``kubectl exec`` (see the note above ``send_kafka_message``).
 
-Prerequisites — run these port-forwards before starting the script:
+No pip dependencies — only the Python standard library.
 
-    kubectl port-forward hadoop-hadoop-hdfs-nn-0 9870:9870 &
-    kubectl port-forward hadoop-hadoop-hdfs-dn-0 51000:51000 &
+Prerequisites
+-------------
+The Istio gateway must be up and the routes applied — i.e. you've
+completed README Steps 12–14:
+
+    helm install istio-gateway ...         (Step 12)
+    kubectl apply -f istio-routes.yaml     (Step 14)
+
+Quick check before running this script:
+
+    curl -sI http://hdfs.localhost:8081 | head -1
+    # Should print: HTTP/1.1 200 OK
 """
 
 import glob
 import json
 import os
-import socket
 import subprocess
 import sys
 import threading
@@ -34,10 +43,13 @@ LOCAL_DIR = "math-images"
 HDFS_DIR = "/math-images"
 MAX_WORKERS = 4
 
-# WebHDFS endpoints — assumes port-forwards are already running (see README).
-NAMENODE_WEBHDFS = "http://localhost:9870/webhdfs/v1"
-DATANODE_HOST = "localhost"
-DATANODE_PORT = 51000
+# Istio gateway entry points (host:8081 → Envoy → in-cluster Service).
+# These hostnames are defined in istio-routes.yaml and the port mapping
+# comes from `-p "8081:80@loadbalancer"` in `k3d cluster create` (README
+# Step 5).
+GATEWAY_NAMENODE = "http://hdfs.localhost:8081"
+GATEWAY_DATANODE = "http://hdfs-dn.localhost:8081"
+NAMENODE_WEBHDFS = f"{GATEWAY_NAMENODE}/webhdfs/v1"
 
 # HDFS user for WebHDFS requests.  The NameNode process runs as root in the
 # farberg/apache-hadoop container, so root is the HDFS superuser.  Without
@@ -47,10 +59,12 @@ HDFS_USER = "root"
 
 print_lock = threading.Lock()
 
-PORT_FORWARD_HINT = (
-    "\n  Make sure the port-forwards are running (see README Step 8):\n"
-    "    kubectl port-forward hadoop-hadoop-hdfs-nn-0 9870:9870 &\n"
-    "    kubectl port-forward hadoop-hadoop-hdfs-dn-0 51000:51000 &"
+GATEWAY_HINT = (
+    "\n  Make sure the Istio gateway is up and the routes are applied\n"
+    "  (README Steps 12-14):\n"
+    "    kubectl get pods -n istio-system          # gateway pod Running?\n"
+    "    kubectl get gateway,virtualservice -A     # routes applied?\n"
+    "    curl -sI http://hdfs.localhost:8081 | head -1"
 )
 
 # ---------------------------------------------------------------------------
@@ -74,49 +88,45 @@ def _friendly_http_error(exc, context):
 
 
 # ---------------------------------------------------------------------------
-# WebHDFS helpers
+# WebHDFS helpers — all traffic goes through the Envoy gateway
 # ---------------------------------------------------------------------------
 
 
-def _rewrite_to_local_datanode(location):
-    """Rewrite any WebHDFS DataNode redirect URL to the local port-forward.
+def _rewrite_to_gateway_datanode(location):
+    """Rewrite a WebHDFS DataNode redirect URL to the gateway hostname.
 
-    Inside k3d the DataNodes report their hostname as ``example.com``
-    (an unreachable placeholder).  We unconditionally replace the
-    host:port with the local port-forward target.
+    The NameNode's redirect points at an in-cluster DataNode address
+    (something like ``example.com:51000`` or a pod DNS name) that the
+    host machine can't reach.  We swap the scheme://host:port for the
+    gateway entry point and keep the path + query string intact — that's
+    where the block token lives.
     """
     parsed = urlparse(location)
-    return urlunparse(parsed._replace(
-        netloc=f"{DATANODE_HOST}:{DATANODE_PORT}"
-    ))
+    gw = urlparse(GATEWAY_DATANODE)
+    return urlunparse(parsed._replace(scheme=gw.scheme, netloc=gw.netloc))
 
 
-def check_webhdfs():
-    """Verify the WebHDFS NameNode is reachable."""
-    url = f"{NAMENODE_WEBHDFS}/?user.name={HDFS_USER}&op=LISTSTATUS"
-    try:
-        with urlopen(Request(url), timeout=5) as resp:
-            json.loads(resp.read())
-    except (HTTPError, URLError, OSError, ValueError) as exc:
-        print(f"  ERROR: {_friendly_http_error(exc, 'NameNode health-check')}")
-        print(PORT_FORWARD_HINT)
-        sys.exit(1)
+def check_gateway():
+    """Verify both gateway routes (NameNode + DataNode) answer.
 
-
-def check_datanode():
-    """Verify the DataNode port-forward is reachable."""
-    try:
-        with socket.create_connection(
-            (DATANODE_HOST, DATANODE_PORT), timeout=3
-        ):
+    A 404 from the DataNode is *fine* — the WebHDFS handler only
+    accepts requests that carry a valid block token.  We just want to
+    confirm Envoy forwards the connection rather than refusing it.
+    """
+    for label, url in [
+        ("NameNode", f"{NAMENODE_WEBHDFS}/?user.name={HDFS_USER}&op=LISTSTATUS"),
+        ("DataNode", f"{GATEWAY_DATANODE}/"),
+    ]:
+        try:
+            with urlopen(Request(url), timeout=5) as resp:
+                resp.read()
+        except HTTPError:
+            # Any HTTP status means Envoy reached a backend — good enough.
             pass
-    except (ConnectionRefusedError, OSError):
-        print(
-            f"  ERROR: Cannot connect to DataNode at "
-            f"{DATANODE_HOST}:{DATANODE_PORT}."
-        )
-        print(PORT_FORWARD_HINT)
-        sys.exit(1)
+        except (URLError, OSError) as exc:
+            print(f"  ERROR: Gateway route '{label}' unreachable — {exc.reason}")
+            print(GATEWAY_HINT)
+            sys.exit(1)
 
 
 def hdfs_mkdir(path):
@@ -140,14 +150,14 @@ def hdfs_mkdir(path):
 def hdfs_upload(local_path, hdfs_path):
     """Upload a local file to HDFS via WebHDFS (two-step CREATE).
 
-    1. PUT with ``noredirect=true`` to get the DataNode URL in JSON
-    2. Rewrite the DataNode URL to localhost and PUT the file bytes
+    1. PUT to the NameNode (via gateway) with ``noredirect=true`` — it
+       replies with a DataNode URL in the JSON body instead of a 307.
+    2. Rewrite that URL's host to the DataNode gateway hostname and
+       PUT the file bytes there.
     """
     filename = os.path.basename(local_path)
 
-    # Step 1 — ask the NameNode which DataNode to write to.
-    # ``noredirect=true`` returns the DataNode URL as JSON instead of a
-    # 307 redirect, which is easier to handle from Python.
+    # Step 1 — ask the NameNode (through Envoy) which DataNode to write to.
     create_url = (
         f"{NAMENODE_WEBHDFS}{hdfs_path}"
         f"?user.name={HDFS_USER}&op=CREATE&overwrite=true&noredirect=true"
@@ -159,10 +169,10 @@ def hdfs_upload(local_path, hdfs_path):
         raise RuntimeError(
             _friendly_http_error(exc, f"NameNode CREATE for {filename}")
         ) from None
-    except (URLError, OSError) as exc:
+    except (URLError, OSError):
         raise RuntimeError(
-            f"Cannot reach NameNode for {filename} — "
-            "is the NameNode port-forward running?"
+            f"Cannot reach NameNode via gateway for {filename} — "
+            "is the Istio gateway running?"
         ) from None
 
     redirect_url = body.get("Location")
@@ -172,8 +182,9 @@ def hdfs_upload(local_path, hdfs_path):
             f"Response: {body}"
         )
 
-    # Step 2 — PUT file bytes to the rewritten DataNode URL.
-    dn_url = _rewrite_to_local_datanode(redirect_url)
+    # Step 2 — rewrite the in-cluster DataNode URL so it goes through
+    # Envoy, then PUT the file bytes.
+    dn_url = _rewrite_to_gateway_datanode(redirect_url)
     with open(local_path, "rb") as fh:
         data = fh.read()
     req = Request(dn_url, data=data, method="PUT")
@@ -190,16 +201,35 @@ def hdfs_upload(local_path, hdfs_path):
         raise RuntimeError(
             _friendly_http_error(exc, f"DataNode write for {filename}")
         ) from None
-    except (URLError, OSError) as exc:
+    except (URLError, OSError):
         raise RuntimeError(
-            f"Cannot reach DataNode at {DATANODE_HOST}:{DATANODE_PORT} "
-            f"for {filename} — is the DataNode port-forward running?"
+            f"Cannot reach DataNode via gateway for {filename} — "
+            "is the hdfs-dn route applied? (kubectl apply -f istio-routes.yaml)"
         ) from None
 
 
 # ---------------------------------------------------------------------------
-# Kafka helper (still uses kubectl exec — only two sequential calls)
+# Kafka helper — still uses kubectl exec
 # ---------------------------------------------------------------------------
+#
+# Why isn't this going through the gateway too?
+#
+# The gateway *does* expose Kafka on localhost:9094 (TCP passthrough),
+# but that only gets you as far as the bootstrap handshake.  After
+# bootstrap, the broker sends back metadata listing all three broker
+# addresses — and those are internal pod DNS names
+# (kafka-controller-{0,1,2}.kafka-controller-headless...).  An external
+# client tries to connect to those names directly and fails.
+#
+# Fixing it properly means either:
+#   (a) reconfiguring Kafka's `advertised.listeners` to point at the
+#       gateway, AND exposing one gateway port per broker, or
+#   (b) running a Kafka REST Proxy inside the cluster and hitting that
+#       over HTTP.
+# Both add significant moving parts for what is, in this script, exactly
+# two messages.  Running the producer inside a broker pod sidesteps the
+# whole problem.
+#
 def send_kafka_message(message_dict):
     """
       TODO move to a python API, Claude did this
@@ -256,11 +286,10 @@ def main():
     file_count = len(files)
     print(f"Found {file_count} images in {LOCAL_DIR}/")
 
-    # 0. Pre-flight: make sure WebHDFS is reachable
-    print("\nChecking WebHDFS connectivity...")
-    check_webhdfs()
-    check_datanode()
-    print("  OK — NameNode and DataNode are reachable.")
+    # 0. Pre-flight: make sure the gateway routes answer
+    print("\nChecking Istio gateway -> HDFS connectivity...")
+    check_gateway()
+    print("  OK - NameNode and DataNode reachable via gateway.")
 
     # 1. Kafka STARTING
     start_msg = {
@@ -273,12 +302,12 @@ def main():
     send_kafka_message(start_msg)
     print("  Sent.")
 
-    # 2. Create HDFS directory via WebHDFS
+    # 2. Create HDFS directory via WebHDFS (through the gateway)
     print(f"\nCreating HDFS directory {HDFS_DIR}...")
     hdfs_mkdir(HDFS_DIR)
     print("  Done.")
 
-    # 3. Upload files concurrently via WebHDFS REST API
+    # 3. Upload files concurrently via WebHDFS REST API (through the gateway)
     print(f"\nUploading {file_count} files to HDFS ({MAX_WORKERS} workers)...")
     errors = []
     with ThreadPoolExecutor(max_workers=MAX_WORKERS) as pool:

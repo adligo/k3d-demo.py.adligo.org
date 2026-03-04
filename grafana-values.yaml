@@ -1,0 +1,33 @@
+# Lightweight Grafana configuration for K3D demo
+# Chart: grafana/grafana
+
+# Fixed demo credentials so you don't have to dig them out of a Secret.
+# DO NOT use a hard-coded password like this outside of a local demo.
+adminUser: admin
+adminPassword: admin
+
+# Persistence is disabled by default in this chart — dashboards you build
+# in the UI will be lost if the pod restarts.  Fine for a demo.
+persistence:
+  enabled: false
+
+resources:
+  requests:
+    memory: "128Mi"
+    cpu: "10m"
+  limits:
+    memory: "512Mi"
+    cpu: "250m"
+
+# Pre-wire Prometheus as the default datasource so Grafana is useful
+# the moment it starts.  The URL is the in-cluster Service DNS name
+# created by the Prometheus chart (README Step 10).
+datasources:
+  datasources.yaml:
+    apiVersion: 1
+    datasources:
+      - name: Prometheus
+        type: prometheus
+        url: http://prometheus-server
+        access: proxy
+        isDefault: true

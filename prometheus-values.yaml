@@ -1,0 +1,38 @@
+# Lightweight Prometheus configuration for K3D demo
+# Chart: prometheus-community/prometheus
+
+# Prometheus server — scrapes metrics from the K3D cluster
+server:
+  persistentVolume:
+    enabled: false
+  resources:
+    requests:
+      memory: "256Mi"
+      cpu: "10m"
+    limits:
+      memory: "1Gi"
+      cpu: "500m"
+  # Keep 6h of metrics — plenty for a demo, keeps memory low
+  retention: "6h"
+
+# Alertmanager — handles alerts fired by Prometheus rules.
+# Disabled for this demo (no alert rules configured).
+alertmanager:
+  enabled: false
+
+# Pushgateway — lets short-lived batch jobs push metrics.
+# Disabled for this demo (nothing pushes metrics yet).
+prometheus-pushgateway:
+  enabled: false
+
+# kube-state-metrics — exposes Kubernetes object state
+# (pod status, deployment replica counts, etc.) as metrics.
+# Keep this ON so you can query things like kube_pod_status_phase.
+kube-state-metrics:
+  enabled: true
+
+# node-exporter — exposes host-level metrics (CPU, memory, disk).
+# In K3D the "nodes" are Docker containers, so these numbers reflect
+# the container, not the bare-metal host — still useful for the demo.
+prometheus-node-exporter:
+  enabled: true

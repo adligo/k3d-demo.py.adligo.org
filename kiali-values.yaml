@@ -1,0 +1,28 @@
+# Lightweight Kiali configuration for K3D demo
+# Chart: kiali/kiali-server
+#
+# Kiali is the Istio service-mesh dashboard.  It reads traffic metrics
+# from Prometheus and mesh config from istiod to draw a live graph of
+# who-is-talking-to-whom inside the cluster.
+
+# "anonymous" disables login entirely.  Never do this outside a local
+# sandbox — anyone who can reach the UI has full read access to mesh
+# topology and config.
+auth:
+  strategy: anonymous
+
+# Kiali needs Prometheus to render the traffic graph.  Prometheus was
+# installed in the "default" namespace (Step 10), Kiali lives in
+# "istio-system", so we need the fully-qualified service DNS name.
+external_services:
+  prometheus:
+    url: "http://prometheus-server.default"
+
+deployment:
+  resources:
+    requests:
+      cpu: "10m"
+      memory: "128Mi"
+    limits:
+      cpu: "500m"
+      memory: "512Mi"

@@ -1,0 +1,197 @@
+# Istio Gateway + VirtualService routes for the K3D demo.
+#
+# Apply with:   kubectl apply -f istio-routes.yaml
+# Remove with:  kubectl delete -f istio-routes.yaml
+#
+# How it works
+# ------------
+# The Gateway object tells the Envoy ingress pod which ports to listen on
+# and which hostnames to accept.  Each VirtualService then tells Envoy
+# where to forward matching traffic *inside* the cluster.
+#
+# HTTP services (Grafana, Prometheus, Kiali, HDFS UI) share port 80 and
+# are told apart by the HTTP Host header.  Kafka is raw TCP so it gets
+# its own dedicated port — there is no Host header to route on.
+#
+# The `*.localhost` hostnames below resolve to 127.0.0.1 on most modern
+# OSes (Linux, macOS, Windows) without touching /etc/hosts.
+---
+apiVersion: networking.istio.io/v1
+kind: Gateway
+metadata:
+  name: demo-gateway
+  namespace: istio-system
+spec:
+  # Bind to the Envoy pod deployed by the istio/gateway chart.
+  # When the release is named "istio-gateway", the chart strips the
+  # "istio-" prefix and sets the pod label `istio: gateway`.
+  selector:
+    istio: gateway
+  servers:
+    - port:
+        number: 80
+        name: http
+        protocol: HTTP
+      hosts:
+        - "grafana.localhost"
+        - "prometheus.localhost"
+        - "kiali.localhost"
+        - "hdfs.localhost"
+        - "hdfs-dn.localhost"
+    - port:
+        number: 9092
+        name: tcp-kafka
+        protocol: TCP
+      hosts:
+        - "*"
+---
+# Grafana — remote dashboards & visualisation
+apiVersion: networking.istio.io/v1
+kind: VirtualService
+metadata:
+  name: grafana
+  namespace: istio-system
+spec:
+  hosts:
+    - "grafana.localhost"
+  gateways:
+    - demo-gateway
+  http:
+    - route:
+        - destination:
+            host: grafana.default.svc.cluster.local
+            port:
+              number: 80
+---
+# Prometheus — remote cluster-metrics queries
+apiVersion: networking.istio.io/v1
+kind: VirtualService
+metadata:
+  name: prometheus
+  namespace: istio-system
+spec:
+  hosts:
+    - "prometheus.localhost"
+  gateways:
+    - demo-gateway
+  http:
+    - route:
+        - destination:
+            host: prometheus-server.default.svc.cluster.local
+            port:
+              number: 80
+---
+# Kiali — Istio's own dashboard (live traffic graph)
+apiVersion: networking.istio.io/v1
+kind: VirtualService
+metadata:
+  name: kiali
+  namespace: istio-system
+spec:
+  hosts:
+    - "kiali.localhost"
+  gateways:
+    - demo-gateway
+  http:
+    - route:
+        - destination:
+            host: kiali.istio-system.svc.cluster.local
+            port:
+              number: 20001
+---
+# HDFS NameNode Web UI + WebHDFS REST API
+#
+# WebHDFS writes are a two-step dance: the NameNode replies with a
+# redirect URL pointing at a specific DataNode.  That URL carries an
+# internal cluster hostname, so the upload script rewrites it to
+# `hdfs-dn.localhost` before following it (see the next two objects).
+apiVersion: networking.istio.io/v1
+kind: VirtualService
+metadata:
+  name: hdfs
+  namespace: istio-system
+spec:
+  hosts:
+    - "hdfs.localhost"
+  gateways:
+    - demo-gateway
+  http:
+    - route:
+        - destination:
+            host: hadoop-hadoop-hdfs-nn.default.svc.cluster.local
+            port:
+              number: 9870
+---
+# HDFS DataNode WebHDFS write endpoint — Service wrapper
+#
+# The Hadoop chart's DataNode Service (`hadoop-hadoop-hdfs-dn`) only
+# exposes port 9000 (the DFS RPC protocol).  WebHDFS writes land on
+# port 51000, which isn't in that Service's port list, so Istio can't
+# route to it.  Rather than patch the vendored chart we drop a thin
+# Service here that selects the same pods and exposes 51000.
+#
+# With >1 DataNode replica this Service round-robins, which means the
+# gateway may hand the write to a different DataNode than the NameNode
+# picked.  WebHDFS tolerates this — the block metadata lives in the
+# request URL, not in any per-DataNode session.
+apiVersion: v1
+kind: Service
+metadata:
+  name: hdfs-dn-webhdfs
+  namespace: default
+spec:
+  selector:
+    app.kubernetes.io/name: hadoop
+    app.kubernetes.io/instance: hadoop
+    app.kubernetes.io/component: hdfs-dn
+  ports:
+    - name: webhdfs
+      port: 51000
+      targetPort: 51000
+---
+# HDFS DataNode WebHDFS write endpoint — gateway route
+apiVersion: networking.istio.io/v1
+kind: VirtualService
+metadata:
+  name: hdfs-dn
+  namespace: istio-system
+spec:
+  hosts:
+    - "hdfs-dn.localhost"
+  gateways:
+    - demo-gateway
+  http:
+    - route:
+        - destination:
+            host: hdfs-dn-webhdfs.default.svc.cluster.local
+            port:
+              number: 51000
+---
+# Kafka bootstrap — raw TCP, no host-header routing
+#
+# NOTE: This exposes the bootstrap address only.  After the initial
+# metadata handshake, Kafka clients connect *directly* to the broker
+# addresses the cluster advertises — which are internal pod DNS names.
+# So an external producer/consumer on your laptop will fail after
+# bootstrap.  Fixing that requires reconfiguring Kafka's
+# `advertised.listeners`, which is out of scope for this demo.
+# The upload script in Step 15 sidesteps this entirely by using
+# `kubectl exec` to run the producer *inside* the cluster.
+apiVersion: networking.istio.io/v1
+kind: VirtualService
+metadata:
+  name: kafka
+  namespace: istio-system
+spec:
+  hosts:
+    - "*"
+  gateways:
+    - demo-gateway
+  tcp:
+    - match:
+        - port: 9092
+      route:
+        - destination:
+            host: kafka.default.svc.cluster.local
+            port:
+              number: 9092

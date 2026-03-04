@@ -1,0 +1,42 @@
+# Lightweight Istio ingress-gateway configuration for K3D demo
+# Chart: istio/gateway
+#
+# This pod IS Envoy — Istio's gateway chart deploys a standalone Envoy
+# proxy that terminates inbound connections and routes them according
+# to Gateway / VirtualService resources (see istio-routes.yaml).
+
+service:
+  # K3D's built-in klipper-lb assigns a LoadBalancer IP reachable on
+  # every node.  The `k3d cluster create -p` flags in README Step 5 map
+  # host ports onto those node ports.
+  type: LoadBalancer
+  ports:
+    - name: status-port
+      port: 15021
+      protocol: TCP
+      targetPort: 15021
+    # HTTP — host-header routed to Grafana / Prometheus / Kiali / HDFS UI.
+    # Mapped to host:8081 via `-p "8081:80@loadbalancer"` in Step 5.
+    - name: http2
+      port: 80
+      protocol: TCP
+      targetPort: 80
+    # Raw TCP passthrough for Kafka bootstrap.
+    # Mapped to host:9094 via `-p "9094:9092@loadbalancer"` in Step 5.
+    - name: tcp-kafka
+      port: 9092
+      protocol: TCP
+      targetPort: 9092
+
+resources:
+  requests:
+    cpu: "10m"
+    memory: "64Mi"
+  limits:
+    cpu: "500m"
+    memory: "256Mi"
+
+# One gateway replica is plenty for a demo.
+autoscaling:
+  enabled: false
+replicaCount: 1

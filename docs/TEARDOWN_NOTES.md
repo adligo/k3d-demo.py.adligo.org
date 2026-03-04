@@ -10,6 +10,24 @@ This file contains instructions on how to tear down/destroy all of the Docker co
 
 
 ```bash
+# Delete the Istio Gateway + VirtualService routes
+kubectl delete -f istio-routes.yaml --ignore-not-found
+
+# Delete the Kiali Helm release
+helm uninstall kiali -n istio-system
+
+# Delete Istio (reverse install order: gateway → control plane → CRDs)
+helm uninstall istio-gateway -n istio-system
+helm uninstall istiod -n istio-system
+helm uninstall istio-base -n istio-system
+kubectl delete namespace istio-system --ignore-not-found
+
+# Delete the Grafana Helm release
+helm uninstall grafana
+
+# Delete the Prometheus Helm release
+helm uninstall prometheus
+
 # Delete the Kafka Helm release
 helm uninstall kafka
 

@@ -1,0 +1,32 @@
+# Lightweight Istio control-plane configuration for K3D demo
+# Chart: istio/istiod
+
+# The chart's default request is 500m CPU / 2Gi memory — far too heavy
+# for a laptop VM.  Pilot runs fine on a fraction of that in a 5-node
+# demo cluster.
+pilot:
+  resources:
+    requests:
+      cpu: "50m"
+      memory: "256Mi"
+    limits:
+      cpu: "500m"
+      memory: "1Gi"
+
+# One control-plane pod is plenty for a demo; disable HPA so it doesn't
+# try to scale up under transient load.
+autoscaleEnabled: false
+replicaCount: 1
+
+global:
+  # Envoy sidecars injected into application pods also default to
+  # 100m/128Mi requests.  Trim them so HDFS/Kafka pods don't get
+  # starved on a small VM.
+  proxy:
+    resources:
+      requests:
+        cpu: "10m"
+        memory: "64Mi"
+      limits:
+        cpu: "500m"
+        memory: "256Mi"
